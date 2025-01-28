@@ -89,28 +89,7 @@ There are two ways to run the various language quickstarts in this repository. Y
 code directly or you can run it in Docker. If you would like to run the code via Docker, skip to the
 [Run with Docker](#run-with-docker) section.
 
-### Run without Docker
 
-#### Pre-requisites
-
-- The language you intend to use is installed on your machine and available at your command line.
-  This repo should generally work with active LTS versions of each language such as node >= 14,
-  python >= 3.8, ruby >= 2.6, etc.
-- Your environment variables populated in `.env`
-- [npm](https://www.npmjs.com/get-npm)
-- If using Windows, a command line utility capable of running basic Unix shell commands
-
-#### 1. Running the backend
-
-Once started with one of the commands below, the quickstart will be running on http://localhost:8000 for the backend. Enter the additional commands in step 2 to run the frontend which will run on http://localhost:3000.
-
-##### Node
-
-```bash
-$ cd ./node
-$ npm install
-$ ./start.sh
-```
 
 ##### Python
 
@@ -142,31 +121,6 @@ open /Applications/Python\ 3.9/Install\ Certificates.command
 open /Applications/Python\ 3.6/Install\ Certificates.command
 ```
 
-##### Ruby
-
-```bash
-cd ./ruby
-bundle
-./start.sh
-```
-
-##### Go
-
-```bash
-cd ./go
-go build
-./start.sh
-```
-
-##### Java
-
-```bash
-cd ./java
-mvn clean package
-./start.sh
-```
-
-##### .NET
 
 A community-supported implementation of the Plaid Quickstart using the [Going.Plaid](https://github.com/viceroypenguin/Going.Plaid) client library can be found at [PlaidQuickstartBlazor](https://github.com/jcoliz/PlaidQuickstartBlazor). Note that Plaid does not provide first-party support for .NET client libraries and that this Quickstart and client library are not created, reviewed, or supported by Plaid. 
 
