@@ -1,137 +1,223 @@
-import React, { useEffect, useContext, useCallback } from "react";
+// src/App.tsx
+import { useEffect, useState, useCallback } from "react";
+import { usePlaidLink } from "react-plaid-link";
+import "./app.css";
 
-import Header from "./Components/Headers";
-import Products from "./Components/ProductTypes/Products";
-import Items from "./Components/ProductTypes/Items";
-import Context from "./Context";
+interface PlaidLinkResponse {
+  link_token: string;
+  user_id: string;
+}
 
-import styles from "./App.module.scss";
-import { CraCheckReportProduct } from "plaid";
+interface Transaction {
+  account_id: string;
+  amount: number;
+  date: string;
+  name: string;
+  merchant_name?: string;
+  payment_channel: string;
+  pending: boolean;
+  transaction_id: string;
+}
 
-const App = () => {
-  const { linkSuccess, isPaymentInitiation, itemId, dispatch } =
-    useContext(Context);
+interface LinkProps {
+  linkToken: string;
+  onAccessTokenReceived: (token: string) => void;
+}
 
-  const getInfo = useCallback(async () => {
-    const response = await fetch("/api/info", { method: "POST" });
-    if (!response.ok) {
-      dispatch({ type: "SET_STATE", state: { backend: false } });
-      return { paymentInitiation: false };
-    }
-    const data = await response.json();
-    const paymentInitiation: boolean =
-      data.products.includes("payment_initiation");
-    const craEnumValues = Object.values(CraCheckReportProduct);
-    const isUserTokenFlow: boolean = data.products.some(
-      (product: CraCheckReportProduct) => craEnumValues.includes(product)
-    );
-    const isCraProductsExclusively: boolean = data.products.every(
-      (product: CraCheckReportProduct) => craEnumValues.includes(product)
-    );
-    dispatch({
-      type: "SET_STATE",
-      state: {
-        products: data.products,
-        isPaymentInitiation: paymentInitiation,
-        isCraProductsExclusively: isCraProductsExclusively,
-        isUserTokenFlow: isUserTokenFlow,
-      },
-    });
-    return { paymentInitiation, isUserTokenFlow };
-  }, [dispatch]);
-
-  const generateUserToken = useCallback(async () => {
-    const response = await fetch("api/create_user_token", { method: "POST" });
-    if (!response.ok) {
-      dispatch({ type: "SET_STATE", state: { userToken: null } });
-      return;
-    }
-    const data = await response.json();
-    if (data) {
-      if (data.error != null) {
-        dispatch({
-          type: "SET_STATE",
-          state: {
-            linkToken: null,
-            linkTokenError: data.error,
-          },
-        });
-        return;
-      }
-      dispatch({ type: "SET_STATE", state: { userToken: data.user_token } });
-      return data.user_token;
-    }
-  }, [dispatch]);
-
-  const generateToken = useCallback(
-    async (isPaymentInitiation) => {
-      // Link tokens for 'payment_initiation' use a different creation flow in your backend.
-      const path = isPaymentInitiation
-        ? "/api/create_link_token_for_payment"
-        : "/api/create_link_token";
-      const response = await fetch(path, {
-        method: "POST",
-      });
-      if (!response.ok) {
-        dispatch({ type: "SET_STATE", state: { linkToken: null } });
-        return;
-      }
-      const data = await response.json();
-      if (data) {
-        if (data.error != null) {
-          dispatch({
-            type: "SET_STATE",
-            state: {
-              linkToken: null,
-              linkTokenError: data.error,
+const Link: React.FC<LinkProps> = ({ linkToken, onAccessTokenReceived }) => {
+  const onSuccess = useCallback(
+    async (public_token: string) => {
+      try {
+        const response = await fetch(
+          "http://localhost:8000/api/exchange_token",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
             },
-          });
-          return;
+            body: JSON.stringify({ public_token }),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to exchange token");
         }
-        dispatch({ type: "SET_STATE", state: { linkToken: data.link_token } });
+
+        const data = await response.json();
+        onAccessTokenReceived(data.access_token);
+      } catch (error) {
+        console.error("Error exchanging public token:", error);
       }
-      // Save the link_token to be used later in the Oauth flow.
-      localStorage.setItem("link_token", data.link_token);
     },
-    [dispatch]
+    [onAccessTokenReceived]
   );
 
-  useEffect(() => {
-    const init = async () => {
-      const { paymentInitiation, isUserTokenFlow } = await getInfo(); // used to determine which path to take when generating token
-      // do not generate a new token for OAuth redirect; instead
-      // setLinkToken from localStorage
-      if (window.location.href.includes("?oauth_state_id=")) {
-        dispatch({
-          type: "SET_STATE",
-          state: {
-            linkToken: localStorage.getItem("link_token"),
-          },
-        });
-        return;
-      }
+  const config = {
+    token: linkToken,
+    onSuccess,
+  };
 
-      if (isUserTokenFlow) {
-        await generateUserToken();
-      }
-      generateToken(paymentInitiation);
-    };
-    init();
-  }, [dispatch, generateToken, generateUserToken, getInfo]);
+  const { open, ready } = usePlaidLink(config);
 
   return (
-    <div className={styles.App}>
-      <div className={styles.container}>
-        <Header />
-        {linkSuccess && (
-          <>
-            <Products />
-            {!isPaymentInitiation && itemId && <Items />}
-          </>
+    <button onClick={() => open()} disabled={!ready} className="connect-button">
+      Connect your bank account
+    </button>
+  );
+};
+
+function App() {
+  const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const generateToken = async () => {
+    try {
+      const response = await fetch(
+        "http://localhost:8000/api/create_link_token",
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to create link token");
+      }
+
+      const data = await response.json();
+      setLinkToken(data.link_token);
+    } catch (error) {
+      console.error("Error getting link token:", error);
+      setError("Failed to initialize Plaid Link");
+    }
+  };
+
+  useEffect(() => {
+    generateToken();
+  }, []);
+
+  const getTransactions = async () => {
+    if (!accessToken) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("http://localhost:8000/api/transactions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ access_token: accessToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch transactions");
+      }
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setTransactions(data.latest_transactions);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      setError("Failed to fetch transactions. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  if (error) {
+    return (
+      <div className="container">
+        <div className="error-message">{error}</div>
+        <button onClick={generateToken} className="retry-button">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container">
+      <div className="card">
+        <h1>Plaid Integration Demo</h1>
+
+        {!accessToken ? (
+          linkToken && (
+            <Link
+              linkToken={linkToken}
+              onAccessTokenReceived={setAccessToken}
+            />
+          )
+        ) : (
+          <div className="success-section">
+            <div className="success-message">
+              ✓ Bank account connected successfully
+            </div>
+            <button
+              onClick={getTransactions}
+              className="transactions-button"
+              disabled={loading}
+            >
+              {loading ? "Loading transactions..." : "Get Transactions"}
+            </button>
+          </div>
+        )}
+
+        {loading && (
+          <div className="loading-message">
+            Syncing your transactions... This may take a moment.
+          </div>
+        )}
+
+        {transactions.length > 0 && (
+          <div className="transactions-section">
+            <h2>Recent Transactions</h2>
+            <div className="transactions-list">
+              {transactions.map((transaction) => (
+                <div
+                  key={transaction.transaction_id}
+                  className="transaction-item"
+                >
+                  <div className="transaction-header">
+                    <div className="transaction-name">
+                      {transaction.merchant_name || transaction.name}
+                    </div>
+                    <div className="transaction-amount">
+                      ${Math.abs(transaction.amount).toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="transaction-details">
+                    <div className="transaction-date">
+                      {formatDate(transaction.date)}
+                    </div>
+                    {transaction.pending && (
+                      <div className="transaction-pending">Pending</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>
   );
-};
+}
 
 export default App;
