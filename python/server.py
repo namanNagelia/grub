@@ -73,11 +73,13 @@ PLAID_ENV = os.getenv('PLAID_ENV', 'sandbox')
 PLAID_PRODUCTS = os.getenv('PLAID_PRODUCTS', 'transactions').split(',')
 PLAID_COUNTRY_CODES = os.getenv('PLAID_COUNTRY_CODES', 'US').split(',')
 
+
 def empty_to_none(field):
     value = os.getenv(field)
     if value is None or len(value) == 0:
         return None
     return value
+
 
 host = plaid.Environment.Sandbox
 
@@ -131,6 +133,11 @@ user_token = None
 item_id = None
 
 
+@app.route('/', methods=['GET'])
+def index():
+    return {"message": "Hello World"}
+
+
 @app.route('/api/info', methods=['POST'])
 def info():
     global access_token
@@ -172,17 +179,18 @@ def create_link_token_for_payment():
             request
         )
         pretty_print_response(response.to_dict())
-        
+
         # We store the payment_id in memory for demo purposes - in production, store it in a secure
         # persistent data store along with the Payment metadata, such as userId.
         payment_id = response['payment_id']
-        
+
         linkRequest = LinkTokenCreateRequest(
             # The 'payment_initiation' product has to be the only element in the 'products' list.
             products=[Products('payment_initiation')],
             client_name='Plaid Test',
             # Institutions from all listed countries will be shown.
-            country_codes=list(map(lambda x: CountryCode(x), PLAID_COUNTRY_CODES)),
+            country_codes=list(
+                map(lambda x: CountryCode(x), PLAID_COUNTRY_CODES)),
             language='en',
             user=LinkTokenCreateRequestUser(
                 # This should correspond to a unique id for the current user.
@@ -195,8 +203,8 @@ def create_link_token_for_payment():
             )
         )
 
-        if PLAID_REDIRECT_URI!=None:
-            linkRequest['redirect_uri']=PLAID_REDIRECT_URI
+        if PLAID_REDIRECT_URI != None:
+            linkRequest['redirect_uri'] = PLAID_REDIRECT_URI
         linkResponse = client.link_token_create(linkRequest)
         pretty_print_response(linkResponse.to_dict())
         return jsonify(linkResponse.to_dict())
@@ -211,25 +219,28 @@ def create_link_token():
         request = LinkTokenCreateRequest(
             products=products,
             client_name="Plaid Quickstart",
-            country_codes=list(map(lambda x: CountryCode(x), PLAID_COUNTRY_CODES)),
+            country_codes=list(
+                map(lambda x: CountryCode(x), PLAID_COUNTRY_CODES)),
             language='en',
             user=LinkTokenCreateRequestUser(
                 client_user_id=str(time.time())
             )
         )
-        if PLAID_REDIRECT_URI!=None:
-            request['redirect_uri']=PLAID_REDIRECT_URI
+        if PLAID_REDIRECT_URI != None:
+            request['redirect_uri'] = PLAID_REDIRECT_URI
         if Products('statements') in products:
-            statements=LinkTokenCreateRequestStatements(
+            statements = LinkTokenCreateRequestStatements(
                 end_date=date.today(),
                 start_date=date.today()-timedelta(days=30)
             )
-            request['statements']=statements
+            request['statements'] = statements
 
-        cra_products = ["cra_base_report", "cra_income_insights", "cra_partner_insights"]
+        cra_products = ["cra_base_report",
+                        "cra_income_insights", "cra_partner_insights"]
         if any(product in cra_products for product in PLAID_PRODUCTS):
             request['user_token'] = user_token
-            request['consumer_report_permissible_purpose'] = ConsumerReportPermissiblePurpose('ACCOUNT_REVIEW_CREDIT')
+            request['consumer_report_permissible_purpose'] = ConsumerReportPermissiblePurpose(
+                'ACCOUNT_REVIEW_CREDIT')
             request['cra_options'] = LinkTokenCreateRequestCraOptions(
                 days_requested=60
             )
@@ -242,24 +253,27 @@ def create_link_token():
 
 # Create a user token which can be used for Plaid Check, Income, or Multi-Item link flows
 # https://plaid.com/docs/api/users/#usercreate
+
+
 @app.route('/api/create_user_token', methods=['POST'])
 def create_user_token():
     global user_token
     try:
         consumer_report_user_identity = None
         user_create_request = UserCreateRequest(
-            # Typically this will be a user ID number from your application. 
+            # Typically this will be a user ID number from your application.
             client_user_id="user_" + str(uuid.uuid4())
         )
 
-        cra_products = ["cra_base_report", "cra_income_insights", "cra_partner_insights"]
+        cra_products = ["cra_base_report",
+                        "cra_income_insights", "cra_partner_insights"]
         if any(product in cra_products for product in PLAID_PRODUCTS):
             consumer_report_user_identity = ConsumerReportUserIdentity(
                 first_name="Harry",
                 last_name="Potter",
-                phone_numbers= ['+16174567890'],
-                emails= ['harrypotter@example.com'],
-                primary_address= {
+                phone_numbers=['+16174567890'],
+                emails=['harrypotter@example.com'],
+                primary_address={
                     "city": 'New York',
                     "region": 'NY',
                     "street": '4 Privet Drive',
@@ -306,12 +320,12 @@ def get_access_token():
 @app.route('/api/auth', methods=['GET'])
 def get_auth():
     try:
-       request = AuthGetRequest(
+        request = AuthGetRequest(
             access_token=access_token
         )
-       response = client.auth_get(request)
-       pretty_print_response(response.to_dict())
-       return jsonify(response.to_dict())
+        response = client.auth_get(request)
+        pretty_print_response(response.to_dict())
+        return jsonify(response.to_dict())
     except plaid.ApiException as e:
         error_response = format_error(e)
         return jsonify(error_response)
@@ -329,7 +343,7 @@ def get_transactions():
     # New transaction updates since "cursor"
     added = []
     modified = []
-    removed = [] # Removed transaction ids
+    removed = []  # Removed transaction ids
     has_more = True
     try:
         # Iterate through each page of new transaction updates for item
@@ -341,14 +355,14 @@ def get_transactions():
             response = client.transactions_sync(request).to_dict()
             cursor = response['next_cursor']
             # If no transactions are available yet, wait and poll the endpoint.
-            # Normally, we would listen for a webhook, but the Quickstart doesn't 
-            # support webhooks. For a webhook example, see 
+            # Normally, we would listen for a webhook, but the Quickstart doesn't
+            # support webhooks. For a webhook example, see
             # https://github.com/plaid/tutorial-resources or
             # https://github.com/plaid/pattern
             if cursor == '':
                 time.sleep(2)
-                continue  
-            # If cursor is not an empty string, we got results, 
+                continue
+            # If cursor is not an empty string, we got results,
             # so add this page of results
             added.extend(response['added'])
             modified.extend(response['modified'])
@@ -520,9 +534,10 @@ def get_investments_transactions():
 # This functionality is only relevant for the ACH Transfer product.
 # Authorize a transfer
 
+
 @app.route('/api/transfer_authorize', methods=['GET'])
 def transfer_authorization():
-    global authorization_id 
+    global authorization_id
     global account_id
     request = AccountsGetRequest(access_token=access_token)
     response = client.accounts_get(request)
@@ -557,6 +572,7 @@ def transfer_authorization():
 
 # Create Transfer for a specified Transfer ID
 
+
 @app.route('/api/transfer_create', methods=['GET'])
 def transfer():
     try:
@@ -571,6 +587,7 @@ def transfer():
     except plaid.ApiException as e:
         error_response = format_error(e)
         return jsonify(error_response)
+
 
 @app.route('/api/statements', methods=['GET'])
 def statements():
@@ -595,8 +612,6 @@ def statements():
     except plaid.ApiException as e:
         error_response = format_error(e)
         return jsonify(error_response)
-
-
 
 
 @app.route('/api/signal_evaluate', methods=['GET'])
@@ -647,7 +662,8 @@ def item():
         response = client.item_get(request)
         request = InstitutionsGetByIdRequest(
             institution_id=response['item']['institution_id'],
-            country_codes=list(map(lambda x: CountryCode(x), PLAID_COUNTRY_CODES))
+            country_codes=list(
+                map(lambda x: CountryCode(x), PLAID_COUNTRY_CODES))
         )
         institution_response = client.institutions_get_by_id(request)
         pretty_print_response(response.to_dict())
@@ -661,11 +677,14 @@ def item():
 # Retrieve CRA Base Report and PDF
 # Base report: https://plaid.com/docs/check/api/#cracheck_reportbase_reportget
 # PDF: https://plaid.com/docs/check/api/#cracheck_reportpdfget
+
+
 @app.route('/api/cra/get_base_report', methods=['GET'])
 def cra_check_report():
     try:
         get_response = poll_with_retries(lambda: client.cra_check_report_base_report_get(
-            CraCheckReportBaseReportGetRequest(user_token=user_token, item_ids=[])
+            CraCheckReportBaseReportGetRequest(
+                user_token=user_token, item_ids=[])
         ))
         pretty_print_response(get_response.to_dict())
 
@@ -683,6 +702,8 @@ def cra_check_report():
 # Retrieve CRA Income Insights and PDF with Insights
 # Income insights: https://plaid.com/docs/check/api/#cracheck_reportincome_insightsget
 # PDF w/ income insights: https://plaid.com/docs/check/api/#cracheck_reportpdfget
+
+
 @app.route('/api/cra/get_income_insights', methods=['GET'])
 def cra_income_insights():
     try:
@@ -692,7 +713,8 @@ def cra_income_insights():
         pretty_print_response(get_response.to_dict())
 
         pdf_response = client.cra_check_report_pdf_get(
-            CraCheckReportPDFGetRequest(user_token=user_token, add_ons=[CraPDFAddOns('cra_income_insights')]),
+            CraCheckReportPDFGetRequest(user_token=user_token, add_ons=[
+                                        CraPDFAddOns('cra_income_insights')]),
         )
 
         return jsonify({
@@ -705,6 +727,8 @@ def cra_income_insights():
 
 # Retrieve CRA Partner Insights
 # https://plaid.com/docs/check/api/#cracheck_reportpartner_insightsget
+
+
 @app.route('/api/cra/get_partner_insights', methods=['GET'])
 def cra_partner_insights():
     try:
@@ -723,6 +747,8 @@ def cra_partner_insights():
 # For a webhook example, see
 # https://github.com/plaid/tutorial-resources or
 # https://github.com/plaid/pattern
+
+
 def poll_with_retries(request_callback, ms=1000, retries_left=20):
     while retries_left > 0:
         try:
@@ -737,13 +763,16 @@ def poll_with_retries(request_callback, ms=1000, retries_left=20):
                 retries_left -= 1
                 time.sleep(ms / 1000)
 
+
 def pretty_print_response(response):
-  print(json.dumps(response, indent=2, sort_keys=True, default=str))
+    print(json.dumps(response, indent=2, sort_keys=True, default=str))
+
 
 def format_error(e):
     response = json.loads(e.body)
     return {'error': {'status_code': e.status, 'display_message':
                       response['error_message'], 'error_code': response['error_code'], 'error_type': response['error_type']}}
+
 
 if __name__ == '__main__':
     app.run(port=int(os.getenv('PORT', 8000)))
