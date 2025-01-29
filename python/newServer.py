@@ -24,7 +24,8 @@ app = FastAPI()
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["http://localhost:5173",
+                   "http://localhost:3000", "http://localhost:8000", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -132,7 +133,6 @@ async def get_transactions(request: TransactionRequest):
                 cursor=cursor,
             )
             response = client.transactions_sync(request).to_dict()
-            print(response)
             cursor = response['next_cursor']
             # If no transactions are available yet, wait and poll the endpoint.
             # Normally, we would listen for a webhook, but the Quickstart doesn't
@@ -157,6 +157,8 @@ async def get_transactions(request: TransactionRequest):
     except plaid.ApiException as e:
         return {"error": str(e)}
 
+
+# to Run server: uvicorn newServer:app --reload
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
